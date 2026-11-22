@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Currency Collection Tracker</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header class="topbar">
+
+        <div class="brand">
+            <div class="brand-mark">₹</div>
+
+            <div>
+                <h1>Currency Collection Tracker</h1>
+                <p>Track • Collect • Organize Your Indian Currency Notes</p>
+            </div>
+        </div>
+
+        <div class="today" id="todayLabel"></div>
+
+    </header>
+
+
+    <!-- MAIN NAVIGATION -->
+    <nav class="tabs">
+
+        <button class="tab active" data-page="cashPage">
+            ▤ Cash
+        </button>
+
+        <button class="tab" data-page="seriesPage">
+            ▱ Series
+        </button>
+
+    </nav>
+
+
+    <main>
+
+        <!-- ================= CASH PAGE ================= -->
+
+        <section id="cashPage" class="page active-page">
+
+            <div class="cash-layout">
+
+                <!-- COLLECTION FORM -->
+
+                <section class="panel entry-panel">
+
+                    <div class="panel-heading">
+                        <span class="heading-icon">▤</span>
+
+                        <div>
+                            <h2>Currency Collection Tracker</h2>
+                            <p>Add each note when you collect it.</p>
+                        </div>
+                    </div>
+
+                    <form id="noteForm">
+
+                        <label>Denomination (₹)</label>
+
+                        <div class="denomination-picker"
+                             id="denominationPicker">
+                        </div>
+
+                        <input type="hidden"
+                               id="denomination"
+                               value="10">
+
+                        <label for="prefix">Prefix Number</label>
+
+                        <input
+                            id="prefix"
+                            class="text-input"
+                            placeholder="e.g. 34"
+                            required
+                        >
+
+                        <label for="alphabet">Alphabet</label>
+
+                        <input
+                            id="alphabet"
+                            class="text-input"
+                            placeholder="e.g. C"
+                            required
+                        >
+
+                        <label for="serial">Serial Number</label>
+
+                        <input
+                            id="serial"
+                            class="text-input"
+                            placeholder="e.g. 076045"
+                            required
+                        >
+
+                        <label for="collectionDate">
+                            Collection Date
+                        </label>
+
+                        <input
+                            id="collectionDate"
+                            class="text-input"
+                            type="date"
+                            required
+                        >
+
+                        <button class="primary-button" type="submit">
+                            + Create My Collection Register
+                        </button>
+
+                        <p id="formMessage" class="form-message"></p>
+
+                    </form>
+
+                </section>
+
+
+                <!-- DASHBOARD CONTENT -->
+
+                <section class="dashboard-content">
+
+                    <!-- STATISTICS -->
+
+                    <div class="stats-grid">
+
+                        <article class="stat-card blue">
+                            <div>
+                                <small>Total Notes</small>
+                                <strong id="totalNotes">0</strong>
+                            </div>
+                        </article>
+
+                        <article class="stat-card green">
+                            <div>
+                                <small>Total Amount</small>
+                                <strong id="totalAmount">₹0</strong>
+                            </div>
+                        </article>
+
+                        <article class="stat-card yellow">
+                            <div>
+                                <small>Today's Saving</small>
+                                <strong id="todayAmount">₹0</strong>
+                            </div>
+                        </article>
+
+                        <article class="stat-card purple">
+                            <div>
+                                <small>Collection Days</small>
+                                <strong id="totalDays">0</strong>
+                            </div>
+                        </article>
+
+                    </div>
+
+
+                    <!-- DENOMINATION SUMMARY -->
+
+                    <div
+                        class="denomination-summary"
+                        id="denominationSummary">
+                    </div>
+
+
+                    <!-- CHARTS -->
+
+                    <div class="charts-grid">
+
+                        <article class="panel chart-panel">
+
+                            <h2>Collection by Denomination</h2>
+
+                            <div class="pie-wrap">
+                                <canvas id="denominationChart"></canvas>
+                            </div>
+
+                            <div
+                                id="pieLegend"
+                                class="chart-legend">
+                            </div>
+
+                        </article>
+
+
+                        <article class="panel chart-panel">
+
+                            <h2>Daily Savings by Denomination</h2>
+
+                            <p class="chart-subtitle">
+                                Daily collection value
+                            </p>
+
+                            <div class="line-wrap">
+                                <canvas id="dailyChart"></canvas>
+                            </div>
+
+                        </article>
+
+                    </div>
+
+
+                    <!-- RECENT NOTES -->
+
+                    <article class="panel recent-panel">
+
+                        <div class="section-heading">
+
+                            <h2>Recently Added Notes</h2>
+
+                            <button
+                                class="text-button"
+                                id="goSeries">
+                                View Series →
+                            </button>
+
+                        </div>
+
+                        <div class="table-scroll">
+
+                            <table>
+
+                                <thead>
+                                    <tr>
+                                        <th>Denomination</th>
+                                        <th>Serial Number</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="recentRows">
+                                    <tr>
+                                        <td colspan="4" class="empty-state">
+                                            No notes added yet.
+                                        </td>
+                                    </tr>
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </article>
+
+                </section>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================= SERIES PAGE ================= -->
+
+        <section id="seriesPage" class="page">
+
+            <!-- SERIES STATISTICS -->
+
+            <div class="series-stats stats-grid">
+
+                <article class="stat-card blue">
+                    <div>
+                        <small>Total Series</small>
+                        <strong id="seriesCount">0</strong>
+                    </div>
+                </article>
+
+                <article class="stat-card green">
+                    <div>
+                        <small>Unique Prefixes</small>
+                        <strong id="prefixCount">0</strong>
+                    </div>
+                </article>
+
+                <article class="stat-card yellow">
+                    <div>
+                        <small>Consecutive Groups</small>
+                        <strong id="groupCount">0</strong>
+                    </div>
+                </article>
+
+                <article class="stat-card purple">
+                    <div>
+                        <small>Search Results</small>
+                        <strong id="resultCount">0</strong>
+                    </div>
+                </article>
+
+            </div>
+
+
+            <div class="series-layout">
+
+
+                <!-- DENOMINATION FILTER -->
+
+                <aside class="panel filter-panel">
+
+                    <h2>Filter Series</h2>
+
+                    <button
+                        class="filter-option selected"
+                        data-filter="all">
+
+                        All Denominations
+
+                    </button>
+
+                    <div id="filterOptions"></div>
+
+                </aside>
+
+
+
+                <!-- SERIES TABLE -->
+
+                <section class="panel series-table-panel">
+
+                    <div class="series-toolbar">
+
+                        <div>
+                            <h2 id="seriesTitle">All Series</h2>
+
+                            <p id="seriesSubtitle">
+                                All collected notes arranged by serial number
+                            </p>
+                        </div>
+
+
+                        <div class="sort-controls">
+
+                            <button
+                                class="sort-button active"
+                                data-sort="asc">
+
+                                ↑ Ascending
+
+                            </button>
+
+                            <button
+                                class="sort-button"
+                                data-sort="desc">
+
+                                ↓ Descending
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- SEARCH -->
+
+                    <div class="series-search">
+
+                        <input
+                            id="seriesSearch"
+                            type="search"
+                            placeholder="Search serial number...">
+
+                    </div>
+
+
+                    <!-- TABLE -->
+
+                    <div class="table-scroll">
+
+                        <table class="series-table">
+
+                            <thead>
+
+                                <tr>
+                                    <th>#</th>
+                                    <th>Denomination</th>
+                                    <th>Prefix</th>
+                                    <th>Alphabet</th>
+                                    <th>Serial Number</th>
+                                    <th>Full Series</th>
+                                    <th>Collection Date</th>
+                                    <th>Action</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="seriesRows">
+
+                                <tr>
+                                    <td colspan="8" class="empty-state">
+                                        Your saved serial numbers will appear here.
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    <p class="table-note">
+                        Your notes are automatically arranged
+                        according to their serial numbers.
+                    </p>
+
+                </section>
+
+
+
+                <!-- SERIES INSIGHTS -->
+
+                <aside class="side-panels">
+
+                    <article class="panel insight-panel">
+
+                        <h2>Series Insights</h2>
+
+                        <div class="insight-row">
+                            <span>Saved Notes</span>
+                            <strong id="insightNotes">0</strong>
+                        </div>
+
+                        <div class="insight-row">
+                            <span>Different Denominations</span>
+                            <strong id="insightDenoms">0</strong>
+                        </div>
+
+                        <div class="insight-row">
+                            <span>Repeated Serial Entries</span>
+                            <strong id="duplicateCount">0</strong>
+                        </div>
+
+                    </article>
+
+
+                    <article class="panel insight-panel">
+
+                        <h2>Denomination Summary</h2>
+
+                        <div id="seriesSummary"></div>
+
+                    </article>
+
+                </aside>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <footer>
+        Currency Collection Tracker · Your personal collection register
+    </footer>
+
+
+    <script src="script.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+</body>
+</html>
