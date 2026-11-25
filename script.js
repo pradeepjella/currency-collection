@@ -1,4 +1,3 @@
-
 "use strict";
 
 /* =========================================================
@@ -167,13 +166,12 @@ function init() {
 ========================================================= */
 
 function setDefaultDates() {
-  const dateFields = [
+  [
     "collectionDate",
-    "accountDate",
+    "depositDate",
+    "withdrawalDate",
     "transferDate"
-  ];
-
-  dateFields.forEach(id => {
+  ].forEach(id => {
     const field = getElement(id);
     if (field && !field.value) field.value = todayString();
   });
@@ -202,6 +200,13 @@ function setupNavigation() {
       setTimeout(() => {
         Object.values(charts).forEach(chart => chart?.resize());
       }, 100);
+    });
+  });
+
+  document.querySelectorAll("[data-page-link]").forEach(button => {
+    button.addEventListener("click", () => {
+      const pageId = button.dataset.pageLink;
+      document.querySelector(`[data-page="${pageId}"]`)?.click();
     });
   });
 }
@@ -303,12 +308,6 @@ function setupCashForm() {
 
     renderAll();
   });
-
-  const goSeries = getElement("goSeries");
-
-  goSeries?.addEventListener("click", () => {
-    document.querySelector('[data-page="seriesPage"]')?.click();
-  });
 }
 
 /* =========================================================
@@ -364,52 +363,98 @@ function setupTargetSettings() {
 ========================================================= */
 
 function setupAccountForms() {
-  const accountForm = getElement("accountForm");
-  const transferForm = getElement("transferForm");
+  const bindMoneyForm = ({
+    formId,
+    amountId,
+    dateId,
+    descriptionId,
+    type,
+    messageId
+  }) => {
+    const form = getElement(formId);
+    if (!form) return;
 
-  accountForm?.addEventListener("submit", event => {
-    event.preventDefault();
+    form.addEventListener("submit", event => {
+      event.preventDefault();
 
-    const type = getElement("accountType")?.value;
-    const amount = Number(getElement("accountAmount")?.value);
-    const date = getElement("accountDate")?.value || todayString();
-    const description = getElement("accountDescription")?.value.trim() || "";
+      const amount = Number(getElement(amountId)?.value);
+      const date = getElement(dateId)?.value || todayString();
+      const description = getElement(descriptionId)?.value.trim() || "";
 
-    if (!["deposit", "withdrawal"].includes(type)) {
-      showMessage("accountMessage", "Select a valid transaction type.", "error");
-      return;
-    }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showMessage(messageId, "Enter an amount greater than zero.", "error");
+        return;
+      }
 
-    if (!amount || amount <= 0) {
-      showMessage("accountMessage", "Enter a valid amount.", "error");
-      return;
-    }
+      if (type === "withdrawal" && amount > getBankBalance()) {
+        showMessage(
+          messageId,
+          "Insufficient account balance for this withdrawal.",
+          "error"
+        );
+        return;
+      }
 
-    if (type === "withdrawal" && amount > getBankBalance()) {
-      showMessage("accountMessage", "Insufficient bank balance.", "error");
-      return;
-    }
+      accountTransactions.push({
+        id: createId(),
+        type,
+        amount,
+        date,
+        description,
+        createdAt: new Date().toISOString()
+      });
 
-    accountTransactions.push({
-      id: createId(),
-      type,
-      amount,
-      date,
-      description,
-      createdAt: new Date().toISOString()
+      saveData();
+      form.reset();
+
+      const dateField = getElement(dateId);
+      if (dateField) dateField.value = todayString();
+
+      showMessage(
+        messageId,
+        type === "deposit"
+          ? "Deposit saved successfully."
+          : "Withdrawal recorded successfully."
+      );
+
+      renderAll();
+
+      // Keep the user on Account Savings after saving.
+      document.querySelectorAll(".page").forEach(page => {
+        page.classList.toggle("active", page.id === "accountPage");
+      });
+
+      document.querySelectorAll("[data-page]").forEach(button => {
+        button.classList.toggle(
+          "active",
+          button.dataset.page === "accountPage"
+        );
+      });
     });
+  };
 
-    saveData();
-    accountForm.reset();
-
-    if (getElement("accountDate")) {
-      getElement("accountDate").value = todayString();
-    }
-
-    showMessage("accountMessage", "Account transaction saved!");
-
-    renderAll();
+  // DEPOSIT FORM
+  bindMoneyForm({
+    formId: "depositForm",
+    amountId: "depositAmount",
+    dateId: "depositDate",
+    descriptionId: "depositDescription",
+    type: "deposit",
+    messageId: "depositMessage"
   });
+
+  // WITHDRAWAL FORM
+  bindMoneyForm({
+    formId: "withdrawalForm",
+    amountId: "withdrawalAmount",
+    dateId: "withdrawalDate",
+    descriptionId: "withdrawalDescription",
+    type: "withdrawal",
+    messageId: "withdrawalMessage"
+  });
+
+  // CASH TO BANK TRANSFER
+  const transferForm = getElement("transferForm");
 
   transferForm?.addEventListener("submit", event => {
     event.preventDefault();
@@ -417,47 +462,71 @@ function setupAccountForms() {
     const amount = Number(getElement("transferAmount")?.value);
     const date = getElement("transferDate")?.value || todayString();
 
-    if (!amount || amount <= 0) {
-      showMessage("transferMessage", "Enter a valid transfer amount.", "error");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showMessage(
+        "transferMessage",
+        "Enter an amount greater than zero.",
+        "error"
+      );
       return;
     }
 
     if (amount > getCashBalance()) {
-      showMessage("transferMessage", "Insufficient available cash.", "error");
+      showMessage(
+        "transferMessage",
+        "Insufficient available cash for this transfer.",
+        "error"
+      );
       return;
     }
 
     const transferId = createId();
+    const createdAt = new Date().toISOString();
 
     accountTransactions.push(
       {
         id: `${transferId}-out`,
+        transferId,
         type: "transfer_out",
         amount,
         date,
         description: "Cash transferred to bank",
-        createdAt: new Date().toISOString()
+        createdAt
       },
       {
         id: `${transferId}-in`,
+        transferId,
         type: "transfer_in",
         amount,
         date,
         description: "Received from cash collection",
-        createdAt: new Date().toISOString()
+        createdAt
       }
     );
 
     saveData();
     transferForm.reset();
 
-    if (getElement("transferDate")) {
-      getElement("transferDate").value = todayString();
-    }
+    const dateField = getElement("transferDate");
+    if (dateField) dateField.value = todayString();
 
-    showMessage("transferMessage", "Cash transferred to bank successfully!");
+    showMessage(
+      "transferMessage",
+      "Cash transferred to account successfully."
+    );
 
     renderAll();
+
+    document.querySelectorAll(".page").forEach(page => {
+      page.classList.toggle("active", page.id === "accountPage");
+    });
+
+    document.querySelectorAll("[data-page]").forEach(button => {
+      button.classList.toggle(
+        "active",
+        button.dataset.page === "accountPage"
+      );
+    });
   });
 }
 
@@ -513,6 +582,7 @@ function renderDashboard() {
   setText("targetBankAmount", money(bank));
 
   const collectionDays = new Set(notes.map(note => note.date)).size;
+
   setText("collectionDays", collectionDays);
   setText("totalNotes", notes.length);
   setText("totalNotesCount", notes.length);
@@ -531,7 +601,9 @@ function renderTarget() {
   const target = Number(savingsTarget.amount) || 0;
   const total = getCombinedSavings();
   const remaining = Math.max(0, target - total);
-  const percentage = target > 0 ? Math.min(100, (total / target) * 100) : 0;
+  const percentage = target > 0
+    ? Math.min(100, (total / target) * 100)
+    : 0;
 
   setText("targetPercentage", `${percentage.toFixed(1)}%`);
   setText("remainingTarget", money(remaining));
@@ -610,14 +682,17 @@ function renderRecentNotes() {
 
   const recent = [...notes]
     .sort((a, b) =>
-      new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
+      new Date(b.createdAt || b.date) -
+      new Date(a.createdAt || a.date)
     )
     .slice(0, 8);
 
   if (!recent.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="empty-state">No currency notes added yet.</td>
+        <td colspan="6" class="empty-state">
+          No currency notes added yet.
+        </td>
       </tr>
     `;
     return;
@@ -630,7 +705,9 @@ function renderRecentNotes() {
           ${money(getNoteAmount(note))}
         </span>
       </td>
-      <td>${escapeHTML(note.prefix)} ${escapeHTML(note.alphabet)} ${escapeHTML(note.serial)}</td>
+      <td>${escapeHTML(note.prefix)}</td>
+      <td>${escapeHTML(note.alphabet)}</td>
+      <td>${escapeHTML(note.serial)}</td>
       <td>${formatDate(note.date)}</td>
       <td>${money(getNoteAmount(note))}</td>
     </tr>
@@ -643,7 +720,9 @@ function renderRecentNotes() {
 
 function renderAccount() {
   const bank = getBankBalance();
-  const deposits = getTransactionAmount("deposit") +
+
+  const deposits =
+    getTransactionAmount("deposit") +
     getTransactionAmount("transfer_in");
 
   const withdrawals = getTransactionAmount("withdrawal");
@@ -651,6 +730,26 @@ function renderAccount() {
   setText("accountPageBalance", money(bank));
   setText("totalDeposits", money(deposits));
   setText("totalWithdrawals", money(withdrawals));
+
+  setText(
+    "accountToday",
+    money(
+      accountTransactions
+        .filter(item => item.date === todayString())
+        .reduce((sum, item) => {
+          if (["deposit", "transfer_in"].includes(item.type)) {
+            return sum + Number(item.amount);
+          }
+
+          if (["withdrawal", "transfer_out"].includes(item.type)) {
+            return sum - Number(item.amount);
+          }
+
+          return sum;
+        }, 0)
+    )
+  );
+
   setText("availableCash", money(getCashBalance()));
   setText("transferBankBalance", money(bank));
 
@@ -661,13 +760,17 @@ function renderAccountHistory() {
   const tbody = getElement("accountRows");
   if (!tbody) return;
 
-  const history = [...accountTransactions]
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const history = [...accountTransactions].sort((a, b) =>
+    String(b.date || "").localeCompare(String(a.date || "")) ||
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
 
   if (!history.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="empty-state">No account transactions yet.</td>
+        <td colspan="7" class="empty-state">
+          No account transactions yet.
+        </td>
       </tr>
     `;
     return;
@@ -680,24 +783,43 @@ function renderAccountHistory() {
     transfer_out: "Cash Transfer Out"
   };
 
+  let runningBalance = getBankBalance();
+  const balanceAfter = new Map();
+
+  for (const item of history) {
+    balanceAfter.set(item.id, runningBalance);
+
+    if (item.type === "deposit" || item.type === "transfer_in") {
+      runningBalance -= Number(item.amount) || 0;
+    }
+
+    if (item.type === "withdrawal") {
+      runningBalance += Number(item.amount) || 0;
+    }
+  }
+
   tbody.innerHTML = history.map(item => {
-    const isPositive = ["deposit", "transfer_in"].includes(item.type);
+    const positive = ["deposit", "transfer_in"].includes(item.type);
+
+    const credit = positive ? money(item.amount) : "—";
+    const debit = !positive ? money(item.amount) : "—";
 
     return `
       <tr>
         <td>${formatDate(item.date)}</td>
-        <td>${escapeHTML(item.description || labels[item.type] || item.type)}</td>
         <td>${escapeHTML(labels[item.type] || item.type)}</td>
-        <td class="${isPositive ? "positive-amount" : "negative-amount"}">
-          ${isPositive ? "+" : "−"}${money(item.amount)}
-        </td>
+        <td>${escapeHTML(item.description || "—")}</td>
+        <td class="positive-amount">${credit}</td>
+        <td class="negative-amount">${debit}</td>
+        <td>${money(balanceAfter.get(item.id) || 0)}</td>
         <td>
           <button
             type="button"
             class="delete-button"
             data-delete-transaction="${escapeHTML(item.id)}"
-            aria-label="Delete transaction"
-          >Delete</button>
+          >
+            Delete
+          </button>
         </td>
       </tr>
     `;
@@ -715,22 +837,18 @@ function deleteAccountTransaction(id) {
   if (!item) return;
 
   if (item.type === "transfer_in" || item.type === "transfer_out") {
-    const transferId = id.replace(/-(in|out)$/, "");
+    const transferId = item.transferId ||
+      id.replace(/-(in|out)$/, "");
 
-    const related = accountTransactions.filter(entry =>
-      entry.id === `${transferId}-in` ||
-      entry.id === `${transferId}-out`
+    accountTransactions = accountTransactions.filter(entry =>
+      entry.transferId !== transferId &&
+      entry.id !== `${transferId}-in` &&
+      entry.id !== `${transferId}-out`
     );
-
-    if (related.length === 2) {
-      accountTransactions = accountTransactions.filter(entry =>
-        !related.includes(entry)
-      );
-    } else {
-      accountTransactions = accountTransactions.filter(entry => entry.id !== id);
-    }
   } else {
-    accountTransactions = accountTransactions.filter(entry => entry.id !== id);
+    accountTransactions = accountTransactions.filter(entry =>
+      entry.id !== id
+    );
   }
 
   saveData();
@@ -763,10 +881,16 @@ function lineOptions() {
   return {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { intersect: false, mode: "index" },
+    interaction: {
+      intersect: false,
+      mode: "index"
+    },
     plugins: {
       legend: {
-        labels: { color: "#aab8d0", usePointStyle: true }
+        labels: {
+          color: "#aab8d0",
+          usePointStyle: true
+        }
       }
     },
     scales: {
@@ -778,7 +902,8 @@ function lineOptions() {
         beginAtZero: true,
         ticks: {
           color: "#8998b2",
-          callback: value => `₹${Number(value).toLocaleString("en-IN")}`
+          callback: value =>
+            `₹${Number(value).toLocaleString("en-IN")}`
         },
         grid: { color: "rgba(255,255,255,0.06)" }
       }
@@ -788,6 +913,7 @@ function lineOptions() {
 
 function updateChart(id, config) {
   const canvas = getElement(id);
+
   if (!canvas || typeof Chart === "undefined") return;
 
   if (charts[id]) {
@@ -806,7 +932,9 @@ function renderCharts() {
 
 function renderDenominationChart() {
   const counts = DENOMS.map(item =>
-    notes.filter(note => Number(note.denomination) === item.value).length
+    notes.filter(note =>
+      Number(note.denomination) === item.value
+    ).length
   );
 
   updateChart("denominationChart", {
@@ -828,7 +956,10 @@ function renderDenominationChart() {
   if (legend) {
     legend.innerHTML = DENOMS.map((item, index) => `
       <div class="legend-item">
-        <span class="legend-dot" style="background:${item.color}"></span>
+        <span
+          class="legend-dot"
+          style="background:${item.color}"
+        ></span>
         <span>${item.label}</span>
         <strong>${counts[index]}</strong>
       </div>
@@ -842,7 +973,7 @@ function getRecentDates() {
     ...accountTransactions.map(item => item.date)
   ]);
 
-  return [...dates].filter(Boolean).sort().slice(-14);
+  return [...dates].filter(Boolean).sort().slice(-30);
 }
 
 function renderDailyChart() {
@@ -856,7 +987,9 @@ function renderDailyChart() {
           note.date === date &&
           Number(note.denomination) === item.value
         )
-        .reduce((sum, note) => sum + getNoteAmount(note), 0)
+        .reduce((sum, note) =>
+          sum + getNoteAmount(note), 0
+        )
     ),
     borderColor: item.color,
     backgroundColor: item.color,
@@ -883,7 +1016,9 @@ function calculateDailyBalances() {
   return dates.map(date => {
     notes
       .filter(note => note.date === date)
-      .forEach(note => cash += getNoteAmount(note));
+      .forEach(note => {
+        cash += getNoteAmount(note);
+      });
 
     accountTransactions
       .filter(item => item.date === date)
@@ -907,7 +1042,7 @@ function calculateDailyBalances() {
 function renderAccountChart() {
   const balances = calculateDailyBalances();
 
-  updateChart("accountChart", {
+  updateChart("accountDailyChart", {
     type: "line",
     data: {
       labels: balances.map(item => formatDate(item.date)),
@@ -927,28 +1062,24 @@ function renderAccountChart() {
 function renderCashAccountChart() {
   const balances = calculateDailyBalances();
 
-  updateChart("cashAccountChart", {
+  updateChart("cashTotalChart", {
     type: "line",
     data: {
       labels: balances.map(item => formatDate(item.date)),
-      datasets: [
-        {
-          label: "Available Cash",
-          data: balances.map(item => item.cash),
-          borderColor: "#28d7c5",
-          backgroundColor: "rgba(40,215,197,0.10)",
-          fill: true,
-          tension: 0.35
-        },
-        {
-          label: "Bank Balance",
-          data: balances.map(item => item.bank),
-          borderColor: "#a879ff",
-          backgroundColor: "rgba(168,121,255,0.08)",
-          fill: true,
-          tension: 0.35
-        }
-      ]
+      datasets: [{
+        label: "Daily Cash Collection",
+        data: balances.map(item => {
+          return notes
+            .filter(note => note.date === item.date)
+            .reduce((sum, note) =>
+              sum + getNoteAmount(note), 0
+            );
+        }),
+        borderColor: "#28d7c5",
+        backgroundColor: "rgba(40,215,197,0.10)",
+        fill: true,
+        tension: 0.35
+      }]
     },
     options: lineOptions()
   });
@@ -966,6 +1097,9 @@ function setupSeriesControls() {
   document.querySelectorAll("[data-filter], [data-sort]").forEach(control => {
     control.addEventListener("change", renderSeries);
   });
+
+  getElement("filterOptions")?.addEventListener("change", renderSeries);
+  getElement("seriesSort")?.addEventListener("change", renderSeries);
 }
 
 function getFilteredNotes() {
@@ -996,7 +1130,9 @@ function getFilteredNotes() {
       const counts = {};
 
       notes.forEach(note => {
-        const key = `${note.prefix}-${note.alphabet}-${note.serial}`;
+        const key =
+          `${note.prefix}-${note.alphabet}-${note.serial}`;
+
         counts[key] = (counts[key] || 0) + 1;
       });
 
@@ -1010,15 +1146,25 @@ function getFilteredNotes() {
     }
   }
 
-  const sort = getElement("seriesSort")?.value ||
-    document.querySelector("[data-sort]")?.value ||
-    "newest";
+  const sort = getElement("seriesSort")?.value || "newest";
 
   result.sort((a, b) => {
-    if (sort === "oldest") return new Date(a.date) - new Date(b.date);
-    if (sort === "amount-high") return getNoteAmount(b) - getNoteAmount(a);
-    if (sort === "amount-low") return getNoteAmount(a) - getNoteAmount(b);
-    if (sort === "serial") return String(a.serial).localeCompare(String(b.serial));
+    if (sort === "oldest") {
+      return new Date(a.date) - new Date(b.date);
+    }
+
+    if (sort === "amount-high") {
+      return getNoteAmount(b) - getNoteAmount(a);
+    }
+
+    if (sort === "amount-low") {
+      return getNoteAmount(a) - getNoteAmount(b);
+    }
+
+    if (sort === "serial") {
+      return String(a.serial).localeCompare(String(b.serial));
+    }
+
     return new Date(b.date) - new Date(a.date);
   });
 
@@ -1071,7 +1217,8 @@ function renderSeries() {
   const seen = new Set();
 
   notes.forEach(note => {
-    const key = `${note.prefix}-${note.alphabet}-${note.serial}`;
+    const key =
+      `${note.prefix}-${note.alphabet}-${note.serial}`;
 
     if (seen.has(key)) duplicateKeys.add(key);
     seen.add(key);
@@ -1095,18 +1242,23 @@ function renderSeries() {
   if (!filtered.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-state">No matching currency notes found.</td>
+        <td colspan="8" class="empty-state">
+          No matching currency notes found.
+        </td>
       </tr>
     `;
   } else {
     tbody.innerHTML = filtered.map((note, index) => `
       <tr>
         <td>${index + 1}</td>
+        <td>${money(getNoteAmount(note))}</td>
         <td>${escapeHTML(note.prefix)}</td>
         <td>${escapeHTML(note.alphabet)}</td>
         <td>${escapeHTML(note.serial)}</td>
         <td>
-          <strong>${escapeHTML(note.prefix)}-${escapeHTML(note.alphabet)}-${escapeHTML(note.serial)}</strong>
+          <strong>
+            ${escapeHTML(note.prefix)}-${escapeHTML(note.alphabet)}-${escapeHTML(note.serial)}
+          </strong>
         </td>
         <td>${formatDate(note.date)}</td>
         <td>
@@ -1114,7 +1266,9 @@ function renderSeries() {
             type="button"
             class="delete-button"
             data-delete-note="${escapeHTML(note.id)}"
-          >Delete</button>
+          >
+            Delete
+          </button>
         </td>
       </tr>
     `).join("");
@@ -1135,7 +1289,9 @@ function renderSeriesInsights(filtered, groups, duplicateCount) {
 
   if (insightNotes) {
     insightNotes.textContent = `${filtered.length} notes • ${money(
-      filtered.reduce((sum, note) => sum + getNoteAmount(note), 0)
+      filtered.reduce((sum, note) =>
+        sum + getNoteAmount(note), 0
+      )
     )}`;
   }
 
