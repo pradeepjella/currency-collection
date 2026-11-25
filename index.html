@@ -5,7 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f8f6f1">
-
   <title>Currency Collection | Premium Register</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,10 +16,8 @@
 </head>
 
 <body>
-
 <div class="app-shell">
 
-  <!-- BRAND HEADER -->
   <header class="site-header">
     <a class="brand" href="#" aria-label="Currency Collection home">
       <span class="brand-mark">₹</span>
@@ -36,77 +33,106 @@
     </div>
   </header>
 
-  <!-- NAVIGATION -->
   <nav class="main-nav" aria-label="Main navigation">
     <button class="nav-tab active" data-page="cashPage">
       <span>◈</span> Cash Dashboard
     </button>
-
     <button class="nav-tab" data-page="accountPage">
       <span>▤</span> Account Savings
     </button>
-
     <button class="nav-tab" data-page="seriesPage">
       <span>▦</span> Series Register
     </button>
   </nav>
 
-
   <main class="main-content">
 
-    <!-- =====================================
-         CASH DASHBOARD
-    ====================================== -->
+    <!-- CASH DASHBOARD -->
     <section class="page active" id="cashPage">
 
       <div class="cash-layout">
 
-        <!-- REGISTER NOTE -->
+        <!-- PREMIUM CURRENCY REGISTRATION -->
         <aside class="register-panel">
 
           <div class="register-heading">
             <div class="register-icon">₹</div>
             <div>
-              <h2>Register a Note</h2>
-              <p>Add a newly collected currency note</p>
+              <span class="register-kicker">CURRENCY VAULT</span>
+              <h2>Register Collection</h2>
+              <p>Every currency has a story. Save yours.</p>
             </div>
           </div>
 
+          <div class="register-section-title">
+            <span>01</span>
+            <div>
+              <h3>Choose Currency</h3>
+              <p>Select a coin or banknote</p>
+            </div>
+          </div>
+
+          <div class="denomination-picker" id="denominationPicker"></div>
+          <input type="hidden" id="denomination">
+          <input type="hidden" id="denominationType">
+
           <form id="noteForm">
 
-            <label class="field-label">SELECT DENOMINATION</label>
-            <div class="denomination-picker" id="denominationPicker"></div>
-            <input type="hidden" id="denomination">
+            <div class="register-section-title details-title">
+              <span>02</span>
+              <div>
+                <h3>Collection Details</h3>
+                <p>Enter your currency information</p>
+              </div>
+            </div>
 
             <div class="form-field">
               <label for="prefix">PREFIX NUMBER</label>
-              <input id="prefix" type="text" placeholder="Example: 34" required>
+              <div class="register-input-wrap">
+                <span>⌗</span>
+                <input id="prefix" type="text" placeholder="Example: 34" required>
+              </div>
             </div>
 
             <div class="form-field">
               <label for="alphabet">SERIES ALPHABET</label>
-              <input id="alphabet" type="text" placeholder="Example: C" required>
+              <div class="register-input-wrap">
+                <span>Ⓐ</span>
+                <input id="alphabet" type="text" placeholder="Example: C" required>
+              </div>
             </div>
 
             <div class="form-field">
               <label for="serial">SERIAL NUMBER</label>
-              <input id="serial" type="text" placeholder="Example: 076045" required>
+              <div class="register-input-wrap">
+                <span>№</span>
+                <input id="serial" type="text" placeholder="Example: 076045" required>
+              </div>
             </div>
 
             <div class="form-field">
               <label for="collectionDate">COLLECTION DATE</label>
-              <input id="collectionDate" type="date" required>
+              <div class="register-input-wrap">
+                <span>▦</span>
+                <input id="collectionDate" type="date" required>
+              </div>
             </div>
 
             <div id="formMessage" class="form-message"></div>
 
-            <button class="primary-button gold-button" type="submit">
-              + Add to My Collection
+            <button class="primary-button gold-button register-submit" type="submit">
+              <span>＋</span>
+              Add to My Collection
+              <span class="submit-arrow">→</span>
             </button>
+
+            <div class="register-footer-note">
+              <span>✦</span>
+              Your collection is saved in this browser.
+            </div>
 
           </form>
         </aside>
-
 
         <!-- CASH DASHBOARD CONTENT -->
         <div class="cash-content">
@@ -120,10 +146,7 @@
             <div class="section-rupee">₹</div>
           </div>
 
-
-          <!-- CASH SUMMARY -->
           <div class="stats-grid">
-
             <article class="stat-card">
               <span class="stat-icon">▤</span>
               <div>
@@ -155,11 +178,8 @@
                 <h3 id="collectionDays">0</h3>
               </div>
             </article>
-
           </div>
 
-
-          <!-- DENOMINATION PORTFOLIO -->
           <article class="content-panel">
             <div class="panel-heading">
               <div>
@@ -168,12 +188,9 @@
                 <p>Your collection distributed by currency value.</p>
               </div>
             </div>
-
             <div class="denomination-summary" id="denominationSummary"></div>
           </article>
 
-
-          <!-- CASH CHARTS -->
           <div class="section-heading">
             <div>
               <span class="eyebrow">COLLECTION PERFORMANCE</span>
@@ -183,10 +200,9 @@
           </div>
 
           <div class="charts-grid">
-
             <article class="content-panel">
               <h3>Collection by Denomination</h3>
-              <p>Number of notes in each denomination.</p>
+              <p>Number of notes and coins in each denomination.</p>
               <div class="chart-container">
                 <canvas id="denominationChart"></canvas>
               </div>
@@ -200,7 +216,6 @@
                 <canvas id="dailyChart"></canvas>
               </div>
             </article>
-
           </div>
 
           <article class="content-panel">
@@ -211,16 +226,13 @@
             </div>
           </article>
 
-
-          <!-- RECENT NOTES -->
           <article class="content-panel">
             <div class="panel-heading">
               <div>
                 <span class="eyebrow">YOUR LATEST COLLECTION</span>
-                <h2>Recently Added Notes</h2>
-                <p>Your latest registered currency notes.</p>
+                <h2>Recently Added Currency</h2>
+                <p>Your latest registered coins and banknotes.</p>
               </div>
-
               <button class="text-button" data-page-link="seriesPage">
                 View All Series →
               </button>
@@ -245,13 +257,9 @@
 
         </div>
       </div>
-
     </section>
 
-
-    <!-- =====================================
-         ACCOUNT SAVINGS
-    ====================================== -->
+    <!-- ACCOUNT SAVINGS -->
     <section class="page" id="accountPage">
 
       <div class="section-intro">
@@ -263,10 +271,7 @@
         <div class="section-rupee account-rupee">▤</div>
       </div>
 
-
-      <!-- ACCOUNT TOTALS -->
       <div class="stats-grid account-stats">
-
         <article class="stat-card">
           <span class="stat-icon">▤</span>
           <div>
@@ -298,14 +303,10 @@
             <h3 id="accountToday">₹0</h3>
           </div>
         </article>
-
       </div>
 
-
-      <!-- ACCOUNT ACTIONS -->
       <div class="account-actions-grid">
 
-        <!-- DEPOSIT -->
         <article class="content-panel account-form-panel">
           <div class="panel-heading">
             <span class="account-action-icon deposit-icon">↓</span>
@@ -320,27 +321,19 @@
               <label for="depositAmount">DEPOSIT AMOUNT (₹)</label>
               <input id="depositAmount" type="number" min="1" placeholder="Enter amount" required>
             </div>
-
             <div class="form-field">
               <label for="depositDate">DEPOSIT DATE</label>
               <input id="depositDate" type="date" required>
             </div>
-
             <div class="form-field">
               <label for="depositDescription">DESCRIPTION</label>
               <input id="depositDescription" type="text" placeholder="Example: Monthly savings">
             </div>
-
             <div id="depositMessage" class="form-message"></div>
-
-            <button type="submit" class="primary-button deposit-button">
-              + Add Deposit
-            </button>
+            <button type="submit" class="primary-button deposit-button">+ Add Deposit</button>
           </form>
         </article>
 
-
-        <!-- WITHDRAWAL -->
         <article class="content-panel account-form-panel">
           <div class="panel-heading">
             <span class="account-action-icon withdrawal-icon">↑</span>
@@ -355,27 +348,19 @@
               <label for="withdrawalAmount">WITHDRAWAL AMOUNT (₹)</label>
               <input id="withdrawalAmount" type="number" min="1" placeholder="Enter amount" required>
             </div>
-
             <div class="form-field">
               <label for="withdrawalDate">WITHDRAWAL DATE</label>
               <input id="withdrawalDate" type="date" required>
             </div>
-
             <div class="form-field">
               <label for="withdrawalDescription">DESCRIPTION</label>
               <input id="withdrawalDescription" type="text" placeholder="Example: Personal expenses">
             </div>
-
             <div id="withdrawalMessage" class="form-message"></div>
-
-            <button type="submit" class="primary-button withdrawal-button">
-              − Record Withdrawal
-            </button>
+            <button type="submit" class="primary-button withdrawal-button">− Record Withdrawal</button>
           </form>
         </article>
 
-
-        <!-- CASH TO BANK TRANSFER -->
         <article class="content-panel account-form-panel transfer-panel">
           <div class="panel-heading">
             <span class="account-action-icon transfer-icon">⇄</span>
@@ -402,24 +387,17 @@
               <label for="transferAmount">TRANSFER AMOUNT (₹)</label>
               <input id="transferAmount" type="number" min="1" placeholder="Enter amount" required>
             </div>
-
             <div class="form-field">
               <label for="transferDate">TRANSFER DATE</label>
               <input id="transferDate" type="date" required>
             </div>
-
             <div id="transferMessage" class="form-message"></div>
-
-            <button type="submit" class="primary-button transfer-button">
-              ⇄ Transfer to Account
-            </button>
+            <button type="submit" class="primary-button transfer-button">⇄ Transfer to Account</button>
           </form>
         </article>
 
       </div>
 
-
-      <!-- ACCOUNT DAILY GRAPH -->
       <article class="content-panel account-chart-panel">
         <div class="panel-heading">
           <div>
@@ -442,8 +420,6 @@
         </div>
       </article>
 
-
-      <!-- ACCOUNT TRANSACTION HISTORY -->
       <article class="content-panel">
         <div class="panel-heading">
           <div>
@@ -470,13 +446,9 @@
           </table>
         </div>
       </article>
-
     </section>
 
-
-    <!-- =====================================
-         SERIES REGISTER
-    ====================================== -->
+    <!-- SERIES REGISTER -->
     <section class="page" id="seriesPage">
 
       <div class="section-intro">
@@ -489,7 +461,6 @@
       </div>
 
       <div class="stats-grid">
-
         <article class="stat-card">
           <span class="stat-icon">▤</span>
           <div>
@@ -521,9 +492,7 @@
             <h3 id="resultCount">0</h3>
           </div>
         </article>
-
       </div>
-
 
       <article class="content-panel">
         <div class="panel-heading">
@@ -535,7 +504,6 @@
         </div>
 
         <div class="series-toolbar">
-
           <input
             type="search"
             id="seriesSearch"
@@ -560,7 +528,6 @@
             <option value="amount-low">Lowest Denomination</option>
             <option value="serial">Serial Number</option>
           </select>
-
         </div>
 
         <div class="table-scroll">
@@ -585,11 +552,9 @@
           Your registered notes are automatically arranged according to their serial numbers.
         </div>
       </article>
-
     </section>
 
   </main>
-
 
   <footer class="site-footer">
     <strong>₹ Currency Collection</strong>
@@ -599,6 +564,5 @@
 </div>
 
 <script src="script.js"></script>
-
 </body>
 </html>

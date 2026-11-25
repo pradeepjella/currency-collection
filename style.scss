@@ -1235,3 +1235,398 @@ input[type="date"] {
     scroll-behavior: auto !important;
   }
 }
+/* =========================================
+   COINS AND BANKNOTES
+========================================= */
+
+.denomination-group {
+  margin-bottom: 20px;
+
+  h4 {
+    margin-bottom: 12px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #c6a45d;
+    font-weight: 700;
+  }
+}
+
+.denomination-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.denomination-option {
+  background: var(--denom-color);
+  color: var(--denom-text, #ffffff);
+  border: 2px solid transparent;
+  padding: 12px 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.denomination-option:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.1);
+}
+
+.denomination-option.selected {
+  outline: 3px solid #d4af37;
+  outline-offset: 3px;
+  transform: scale(1.05);
+}
+
+/* Coin appearance */
+
+.coin-option {
+  width: 65px;
+  height: 65px;
+  min-width: 65px;
+  min-height: 65px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50% !important;
+  padding: 5px;
+  box-shadow:
+    inset 0 0 0 3px rgba(255,255,255,0.25),
+    0 4px 10px rgba(0,0,0,0.2);
+}
+
+.denomination-card {
+  border-left: 4px solid var(--denom-color);
+}
+
+.denomination-card .denomination-count {
+  color: var(--denom-color);
+}
+
+/* ==========================================
+   PREMIUM CURRENCY REGISTRATION PANEL
+========================================== */
+
+.register-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 26px;
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(202, 160, 75, 0.13),
+      transparent 40%
+    ),
+    linear-gradient(145deg, #172338, #101a2b);
+
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+
+  color: #f8f5ed;
+}
+
+.register-panel::before {
+  content: "₹";
+  position: absolute;
+  top: 65px;
+  right: -15px;
+  font-size: 180px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.025);
+  pointer-events: none;
+}
+
+.register-heading {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.register-icon {
+  width: 55px;
+  height: 55px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e7c46c, #a87b2d);
+  color: #172033;
+  font-size: 29px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.2);
+}
+
+.register-kicker {
+  color: #d7b765;
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 800;
+}
+
+.register-heading h2 {
+  margin: 5px 0;
+  font-size: 22px;
+  color: #fff;
+}
+
+.register-heading p {
+  margin: 0;
+  font-size: 12px;
+  color: #aab6c8;
+}
+
+.register-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 17px;
+}
+
+.register-section-title > span {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(215, 183, 101, 0.5);
+  border-radius: 10px;
+  color: #e3bf69;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.register-section-title h3 {
+  margin: 0 0 4px;
+  color: #f8f5ed;
+  font-size: 14px;
+}
+
+.register-section-title p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* DENOMINATION PICKER */
+
+.register-panel .denomination-group {
+  position: relative;
+  margin-bottom: 20px;
+  padding: 15px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.register-panel .denomination-group h4 {
+  color: #d7b765;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin: 0 0 14px;
+}
+
+.register-panel .denomination-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.register-panel .denomination-option {
+  min-height: 43px;
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: var(--denom-color);
+  color: var(--denom-text, #fff);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.register-panel .denomination-option:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.12);
+}
+
+.register-panel .denomination-option.selected {
+  outline: 3px solid #e5c46e;
+  outline-offset: 3px;
+  border-color: #fff;
+}
+
+/* COIN BUTTONS */
+
+.register-panel .coin-option {
+  width: 57px;
+  height: 57px;
+  min-width: 57px;
+  min-height: 57px;
+  padding: 5px;
+  border-radius: 50% !important;
+  display: grid;
+  place-items: center;
+  box-shadow:
+    inset 0 0 0 3px rgba(255,255,255,0.25),
+    0 5px 12px rgba(0,0,0,0.25);
+}
+
+/* INPUT FIELDS */
+
+.register-panel .form-field {
+  position: relative;
+  margin-bottom: 17px;
+}
+
+.register-panel .form-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: #d7b765;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.register-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 49px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: 0.25s ease;
+}
+
+.register-input-wrap:focus-within {
+  border-color: #d7b765;
+  box-shadow: 0 0 0 3px rgba(215, 183, 101, 0.12);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.register-input-wrap > span {
+  color: #d7b765;
+  font-size: 18px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.register-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.register-input-wrap input::placeholder {
+  color: #8290a5;
+}
+
+.register-input-wrap input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+}
+
+/* SUBMIT BUTTON */
+
+.register-submit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 53px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 13px;
+  background: linear-gradient(120deg, #e9cc7c, #bd9140);
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(189, 145, 64, 0.2);
+  transition: all 0.25s ease;
+}
+
+.register-submit:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(189, 145, 64, 0.32);
+  filter: brightness(1.07);
+}
+
+.register-submit > span:first-child {
+  font-size: 20px;
+}
+
+.submit-arrow {
+  font-size: 19px;
+  margin-left: auto;
+}
+
+.register-footer-note {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  margin-top: 17px;
+  color: #8e9caf;
+  font-size: 10px;
+  text-align: center;
+}
+
+.register-footer-note span {
+  color: #d7b765;
+}
+
+/* FORM FEEDBACK */
+
+.register-panel .form-message {
+  display: none;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+.register-panel .form-message.success {
+  background: rgba(40, 180, 120, 0.13);
+  color: #71e0ae;
+}
+
+.register-panel .form-message.error {
+  background: rgba(230, 70, 70, 0.13);
+  color: #ff9292;
+}
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+  .register-panel {
+    padding: 19px;
+    border-radius: 17px;
+  }
+
+  .register-heading h2 {
+    font-size: 19px;
+  }
+
+  .register-panel .denomination-options {
+    gap: 10px;
+  }
+
+  .register-panel .coin-option {
+    width: 49px;
+    height: 49px;
+    min-width: 49px;
+    min-height: 49px;
+  }
+}
