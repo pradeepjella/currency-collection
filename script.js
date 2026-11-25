@@ -1,1003 +1,1187 @@
-// ==========================================
-// CURRENCY COLLECTION TRACKER
-// PREMIUM JAVASCRIPT
-// ==========================================
 
+"use strict";
 
-// 1. DENOMINATION SETTINGS
-
-const DENOMS = [
-    { value: 10, color: "#ffca28" },
-    { value: 20, color: "#ef4444" },
-    { value: 50, color: "#2478f2" },
-    { value: 100, color: "#9551e9" },
-    { value: 200, color: "#ff8a00" },
-    { value: 500, color: "#96999e" }
-];
-
-
-// 2. GLOBAL VARIABLES
+/* =========================================================
+   CURRENCY VAULT — MAIN APPLICATION
+   Existing currency notes are preserved.
+========================================================= */
 
 const STORAGE_KEY = "currencyCollectionTracker.notes.v1";
+const ACCOUNT_KEY = "currencyCollectionTracker.account.v1";
+const TARGET_KEY = "currencyCollectionTracker.target.v1";
 
-let notes = loadNotes();
+const DENOMS = [
+  { value: 10, label: "₹10", color: "#ffca28" },
+  { value: 20, label: "₹20", color: "#ef4444" },
+  { value: 50, label: "₹50", color: "#2478f2" },
+  { value: 100, label: "₹100", color: "#9551e9" },
+  { value: 200, label: "₹200", color: "#ff8a00" },
+  { value: 500, label: "₹500", color: "#96999e" }
+];
 
-let selectedDenom = 10;
-let selectedFilter = "all";
-let sortOrder = "asc";
+let notes = loadJSON(STORAGE_KEY, []);
+let accountTransactions = loadJSON(ACCOUNT_KEY, []);
+let savingsTarget = loadJSON(TARGET_KEY, {
+  amount: 100000,
+  date: ""
+});
 
-let pieChart = null;
-let dailyChart = null;
-let dailyTotalChart = null;
+let charts = {};
 
+/* =========================================================
+   HELPERS
+========================================================= */
 
-// 3. COMMON FUNCTIONS
-
-function money(amount) {
-    return "₹" + Number(amount).toLocaleString("en-IN");
+function loadJSON(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
-function todayISO() {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accountTransactions));
+  localStorage.setItem(TARGET_KEY, JSON.stringify(savingsTarget));
 }
 
-function getDenomination(value) {
-    return DENOMS.find(d => d.value === Number(value));
+function getElement(id) {
+  return document.getElementById(id);
 }
 
-function getFullSeries(note) {
-    return `${note.prefix}${note.alphabet} ${note.serial}`;
+function money(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0
+  }).format(Number(value) || 0);
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "—";
+
+  const date = new Date(`${dateString}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+function todayString() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, char => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    }[char]));
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
 }
 
-function formatDate(date) {
-    if (!date) return "—";
+function showMessage(id, message, type = "success") {
+  const element = getElement(id);
+  if (!element) return;
 
-    const [year, month, day] = date.split("-");
-    const monthName = new Date(
-        Number(year),
-        Number(month) - 1,
-        1
-    ).toLocaleString("en-IN", { month: "short" });
+  element.textContent = message;
+  element.className = `form-message ${type}`;
+  element.style.display = "block";
 
-    return `${day} ${monthName} ${year}`;
+  clearTimeout(element.messageTimer);
+
+  element.messageTimer = setTimeout(() => {
+    element.style.display = "none";
+  }, 3500);
 }
 
-function formatShortDate(date) {
-    const [year, month, day] = date.split("-");
-    return `${day}/${month}`;
+function createId() {
+  return window.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-
-// 4. LOCAL STORAGE
-
-function loadNotes() {
-    try {
-        const saved = JSON.parse(
-            localStorage.getItem(STORAGE_KEY) || "[]"
-        );
-
-        return Array.isArray(saved) ? saved : [];
-
-    } catch (error) {
-        console.error("Unable to load collection:", error);
-        return [];
-    }
+function getNoteAmount(note) {
+  return Number(note.denomination) || 0;
 }
 
-function saveNotes() {
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(notes)
-    );
+function getNoteTotal() {
+  return notes.reduce((sum, note) => sum + getNoteAmount(note), 0);
 }
 
+function getTransactionAmount(type) {
+  return accountTransactions
+    .filter(item => item.type === type)
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+}
 
-// 5. INITIALIZE WEBSITE
+function getBankBalance() {
+  return getTransactionAmount("deposit") -
+    getTransactionAmount("withdrawal") +
+    getTransactionAmount("transfer_in");
+}
+
+function getCashBalance() {
+  return getNoteTotal() - getTransactionAmount("transfer_out");
+}
+
+function getCombinedSavings() {
+  return getCashBalance() + getBankBalance();
+}
+
+function getDenomination(value) {
+  return DENOMS.find(item => item.value === Number(value));
+}
+
+/* =========================================================
+   INITIALIZATION
+========================================================= */
+
+document.addEventListener("DOMContentLoaded", init);
 
 function init() {
-    document.getElementById("todayLabel").textContent =
-        new Date().toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        });
+  setDefaultDates();
+  setupNavigation();
+  setupDenominationPicker();
+  setupCashForm();
+  setupTargetSettings();
+  setupAccountForms();
+  setupSeriesControls();
 
-    document.getElementById("collectionDate").value = todayISO();
-
-    buildDenominationPicker();
-    buildFilterOptions();
-    bindEvents();
-    renderAll();
+  renderAll();
 }
 
+/* =========================================================
+   DEFAULT DATES
+========================================================= */
 
-// 6. DENOMINATION PICKER
+function setDefaultDates() {
+  const dateFields = [
+    "collectionDate",
+    "accountDate",
+    "transferDate"
+  ];
 
-function buildDenominationPicker() {
-    const container = document.getElementById("denominationPicker");
-
-    container.innerHTML = DENOMS.map(d => `
-        <button
-            type="button"
-            class="denom-choice ${d.value === selectedDenom ? "selected" : ""}"
-            style="--tone:${d.color}"
-            data-denom="${d.value}">
-            ₹${d.value}
-        </button>
-    `).join("");
-
-    container.querySelectorAll("[data-denom]").forEach(button => {
-        button.addEventListener("click", function () {
-            selectedDenom = Number(this.dataset.denom);
-
-            document.getElementById("denomination").value =
-                selectedDenom;
-
-            buildDenominationPicker();
-        });
-    });
+  dateFields.forEach(id => {
+    const field = getElement(id);
+    if (field && !field.value) field.value = todayString();
+  });
 }
 
+/* =========================================================
+   NAVIGATION
+========================================================= */
 
-// 7. SERIES FILTER OPTIONS
+function setupNavigation() {
+  document.querySelectorAll("[data-page]").forEach(button => {
+    button.addEventListener("click", () => {
+      const pageId = button.dataset.page;
 
-function buildFilterOptions() {
-    const container = document.getElementById("filterOptions");
+      document.querySelectorAll("[data-page]").forEach(item => {
+        item.classList.toggle("active", item === button);
+      });
 
-    container.innerHTML = DENOMS.map(d => `
-        <button
-            class="filter-option"
-            data-filter="${d.value}">
-            <span
-                class="filter-dot"
-                style="--tone:${d.color}">
-            </span>
-            ₹${d.value}
-        </button>
-    `).join("");
+      document.querySelectorAll(".page").forEach(page => {
+        page.classList.toggle("active", page.id === pageId);
+      });
+
+      if (pageId === "seriesPage") renderSeries();
+      if (pageId === "accountPage") renderAccount();
+
+      setTimeout(() => {
+        Object.values(charts).forEach(chart => chart?.resize());
+      }, 100);
+    });
+  });
 }
 
+/* =========================================================
+   DENOMINATION PICKER
+========================================================= */
 
-// 8. EVENT LISTENERS
+function setupDenominationPicker() {
+  const picker = getElement("denominationPicker");
+  const hiddenInput = getElement("denomination");
 
-function bindEvents() {
+  if (!picker || !hiddenInput) return;
 
-    document.querySelectorAll(".tab").forEach(button => {
-        button.addEventListener("click", function () {
-            showPage(this.dataset.page);
-        });
+  picker.innerHTML = DENOMS.map(item => `
+    <button
+      type="button"
+      class="denomination-option"
+      data-value="${item.value}"
+      style="--denom-color:${item.color}"
+    >
+      ${item.label}
+    </button>
+  `).join("");
+
+  picker.addEventListener("click", event => {
+    const button = event.target.closest("[data-value]");
+    if (!button) return;
+
+    hiddenInput.value = button.dataset.value;
+
+    picker.querySelectorAll("[data-value]").forEach(item => {
+      item.classList.toggle("selected", item === button);
     });
-
-    document.getElementById("noteForm")
-        .addEventListener("submit", addNote);
-
-    document.getElementById("goSeries")
-        .addEventListener("click", function () {
-            showPage("seriesPage");
-        });
-
-    document.querySelectorAll("[data-sort]").forEach(button => {
-        button.addEventListener("click", function () {
-            sortOrder = this.dataset.sort;
-
-            document.querySelectorAll("[data-sort]").forEach(btn => {
-                btn.classList.toggle("active", btn === this);
-            });
-
-            renderSeries();
-        });
-    });
-
-    document.getElementById("filterOptions")
-        .addEventListener("click", function (event) {
-            const button = event.target.closest("[data-filter]");
-
-            if (button) {
-                setFilter(button.dataset.filter);
-            }
-        });
-
-    document.querySelector('[data-filter="all"]')
-        .addEventListener("click", function () {
-            setFilter("all");
-        });
-
-    document.getElementById("seriesSearch")
-        .addEventListener("input", renderSeries);
+  });
 }
 
+/* =========================================================
+   CASH COLLECTION
+========================================================= */
 
-// 9. NAVIGATION
+function setupCashForm() {
+  const form = getElement("noteForm");
+  if (!form) return;
 
-function showPage(pageID) {
-    document.querySelectorAll(".page").forEach(page => {
-        page.classList.toggle(
-            "active-page",
-            page.id === pageID
-        );
-    });
-
-    document.querySelectorAll(".tab").forEach(tab => {
-        tab.classList.toggle(
-            "active",
-            tab.dataset.page === pageID
-        );
-    });
-
-    if (pageID === "seriesPage") {
-        renderSeries();
-    }
-}
-
-
-// 10. ADD NEW CURRENCY NOTE
-
-function addNote(event) {
+  form.addEventListener("submit", event => {
     event.preventDefault();
 
-    const prefix = document.getElementById("prefix").value.trim();
+    const denomination = Number(getElement("denomination")?.value);
+    const prefix = getElement("prefix")?.value.trim().toUpperCase() || "";
+    const alphabet = getElement("alphabet")?.value.trim().toUpperCase() || "";
+    const serial = getElement("serial")?.value.trim() || "";
+    const date = getElement("collectionDate")?.value || todayString();
 
-    const alphabet = document.getElementById("alphabet")
-        .value.trim().toUpperCase();
+    if (!getDenomination(denomination)) {
+      showMessage("formMessage", "Please select a denomination.", "error");
+      return;
+    }
 
-    const serial = document.getElementById("serial").value.trim();
-
-    const date = document.getElementById("collectionDate").value;
-
-    const message = document.getElementById("formMessage");
-
-    if (
-        !/^\d+$/.test(prefix) ||
-        !/^[A-Z]{1,3}$/.test(alphabet) ||
-        !/^\d+$/.test(serial) ||
-        !date
-    ) {
-        message.textContent =
-            "Please enter valid prefix, alphabet, serial number and date.";
-
-        message.className = "form-message error";
-        return;
+    if (!prefix || !alphabet || !serial || !date) {
+      showMessage("formMessage", "Please complete all note details.", "error");
+      return;
     }
 
     const duplicate = notes.some(note =>
-        Number(note.denomination) === selectedDenom &&
-        note.prefix === prefix &&
-        note.alphabet === alphabet &&
-        note.serial === serial
+      String(note.prefix).toUpperCase() === prefix &&
+      String(note.alphabet).toUpperCase() === alphabet &&
+      String(note.serial) === serial
     );
 
     if (duplicate) {
-        message.textContent =
-            "This serial number is already registered.";
-
-        message.className = "form-message error";
-        return;
+      showMessage("formMessage", "This serial number already exists.", "error");
+      return;
     }
 
-    const newNote = {
-        id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : String(Date.now() + Math.random()),
-
-        denomination: selectedDenom,
-        prefix,
-        alphabet,
-        serial,
-        date,
-        createdAt: Date.now()
-    };
-
-    notes.push(newNote);
-    saveNotes();
-
-    document.getElementById("noteForm").reset();
-    document.getElementById("collectionDate").value = todayISO();
-
-    message.textContent =
-        `Successfully saved ${money(selectedDenom)} note: ${getFullSeries(newNote)}`;
-
-    message.className = "form-message";
-
-    renderAll();
-}
-
-
-// 11. FILTER SERIES
-
-function setFilter(value) {
-    selectedFilter = value;
-
-    document.querySelectorAll("[data-filter]").forEach(button => {
-        button.classList.toggle(
-            "selected",
-            button.dataset.filter === value
-        );
+    notes.push({
+      id: createId(),
+      denomination,
+      prefix,
+      alphabet,
+      serial,
+      date,
+      createdAt: new Date().toISOString()
     });
 
-    renderSeries();
+    saveData();
+    form.reset();
+
+    if (getElement("collectionDate")) {
+      getElement("collectionDate").value = todayString();
+    }
+
+    getElement("denomination").value = "";
+
+    document.querySelectorAll("#denominationPicker [data-value]")
+      .forEach(button => button.classList.remove("selected"));
+
+    showMessage("formMessage", "Currency note added successfully!");
+
+    renderAll();
+  });
+
+  const goSeries = getElement("goSeries");
+
+  goSeries?.addEventListener("click", () => {
+    document.querySelector('[data-page="seriesPage"]')?.click();
+  });
 }
 
+/* =========================================================
+   SAVINGS TARGET
+========================================================= */
 
-// 12. RENDER EVERYTHING
+function setupTargetSettings() {
+  const editButton = getElement("editTargetButton");
+  const panel = getElement("targetSettingsPanel");
+  const form = getElement("targetForm");
+  const cancelButton = getElement("cancelTargetButton");
+
+  editButton?.addEventListener("click", () => {
+    if (!panel) return;
+
+    panel.classList.toggle("open");
+
+    const input = getElement("targetInput");
+    const date = getElement("targetDate");
+
+    if (input) input.value = savingsTarget.amount || "";
+    if (date) date.value = savingsTarget.date || "";
+  });
+
+  cancelButton?.addEventListener("click", () => {
+    panel?.classList.remove("open");
+  });
+
+  form?.addEventListener("submit", event => {
+    event.preventDefault();
+
+    const amount = Number(getElement("targetInput")?.value);
+    const date = getElement("targetDate")?.value || "";
+
+    if (!amount || amount <= 0) {
+      showMessage("targetMessage", "Enter a valid savings target.", "error");
+      return;
+    }
+
+    savingsTarget = { amount, date };
+
+    saveData();
+    panel?.classList.remove("open");
+
+    showMessage("targetMessage", "Savings target updated!");
+
+    renderAll();
+  });
+}
+
+/* =========================================================
+   ACCOUNT TRANSACTIONS
+========================================================= */
+
+function setupAccountForms() {
+  const accountForm = getElement("accountForm");
+  const transferForm = getElement("transferForm");
+
+  accountForm?.addEventListener("submit", event => {
+    event.preventDefault();
+
+    const type = getElement("accountType")?.value;
+    const amount = Number(getElement("accountAmount")?.value);
+    const date = getElement("accountDate")?.value || todayString();
+    const description = getElement("accountDescription")?.value.trim() || "";
+
+    if (!["deposit", "withdrawal"].includes(type)) {
+      showMessage("accountMessage", "Select a valid transaction type.", "error");
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      showMessage("accountMessage", "Enter a valid amount.", "error");
+      return;
+    }
+
+    if (type === "withdrawal" && amount > getBankBalance()) {
+      showMessage("accountMessage", "Insufficient bank balance.", "error");
+      return;
+    }
+
+    accountTransactions.push({
+      id: createId(),
+      type,
+      amount,
+      date,
+      description,
+      createdAt: new Date().toISOString()
+    });
+
+    saveData();
+    accountForm.reset();
+
+    if (getElement("accountDate")) {
+      getElement("accountDate").value = todayString();
+    }
+
+    showMessage("accountMessage", "Account transaction saved!");
+
+    renderAll();
+  });
+
+  transferForm?.addEventListener("submit", event => {
+    event.preventDefault();
+
+    const amount = Number(getElement("transferAmount")?.value);
+    const date = getElement("transferDate")?.value || todayString();
+
+    if (!amount || amount <= 0) {
+      showMessage("transferMessage", "Enter a valid transfer amount.", "error");
+      return;
+    }
+
+    if (amount > getCashBalance()) {
+      showMessage("transferMessage", "Insufficient available cash.", "error");
+      return;
+    }
+
+    const transferId = createId();
+
+    accountTransactions.push(
+      {
+        id: `${transferId}-out`,
+        type: "transfer_out",
+        amount,
+        date,
+        description: "Cash transferred to bank",
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: `${transferId}-in`,
+        type: "transfer_in",
+        amount,
+        date,
+        description: "Received from cash collection",
+        createdAt: new Date().toISOString()
+      }
+    );
+
+    saveData();
+    transferForm.reset();
+
+    if (getElement("transferDate")) {
+      getElement("transferDate").value = todayString();
+    }
+
+    showMessage("transferMessage", "Cash transferred to bank successfully!");
+
+    renderAll();
+  });
+}
+
+/* =========================================================
+   RENDER ALL
+========================================================= */
 
 function renderAll() {
-    renderCash();
-    renderSeries();
+  renderDashboard();
+  renderTarget();
+  renderDenominationSummary();
+  renderRecentNotes();
+  renderAccount();
+  renderCharts();
+  renderSeries();
 }
 
+/* =========================================================
+   DASHBOARD
+========================================================= */
 
-// 13. CASH DASHBOARD
+function renderDashboard() {
+  const cash = getCashBalance();
+  const bank = getBankBalance();
+  const combined = cash + bank;
+  const today = todayString();
 
-function renderCash() {
-    const totalAmount = notes.reduce(
-        (sum, note) => sum + Number(note.denomination),
-        0
-    );
+  const todayNotes = notes
+    .filter(note => note.date === today)
+    .reduce((sum, note) => sum + getNoteAmount(note), 0);
 
-    const todayAmount = notes
-        .filter(note => note.date === todayISO())
-        .reduce(
-            (sum, note) => sum + Number(note.denomination),
-            0
-        );
+  const todayAccount = accountTransactions
+    .filter(item => item.date === today)
+    .reduce((sum, item) => {
+      if (item.type === "deposit" || item.type === "transfer_in") {
+        return sum + Number(item.amount);
+      }
 
-    const totalDays = new Set(
-        notes.map(note => note.date)
-    ).size;
+      if (item.type === "withdrawal" || item.type === "transfer_out") {
+        return sum - Number(item.amount);
+      }
 
-    document.getElementById("totalNotes").textContent = notes.length;
-    document.getElementById("totalAmount").textContent = money(totalAmount);
-    document.getElementById("todayAmount").textContent = money(todayAmount);
-    document.getElementById("totalDays").textContent = totalDays;
+      return sum;
+    }, 0);
 
-    renderDenominationSummary();
-    renderRecentNotes();
-    renderCharts();
+  setText("totalAmount", money(cash));
+  setText("accountBalance", money(bank));
+  setText("totalWealth", money(combined));
+  setText("todayAmount", money(todayNotes + todayAccount));
+
+  setText("combinedSavings", money(combined));
+  setText("targetCashAmount", money(cash));
+  setText("targetBankAmount", money(bank));
+
+  const collectionDays = new Set(notes.map(note => note.date)).size;
+  setText("collectionDays", collectionDays);
+  setText("totalNotes", notes.length);
+  setText("totalNotesCount", notes.length);
 }
 
+function setText(id, value) {
+  const element = getElement(id);
+  if (element) element.textContent = value;
+}
 
-// 14. DENOMINATION SUMMARY
+/* =========================================================
+   TARGET PROGRESS
+========================================================= */
+
+function renderTarget() {
+  const target = Number(savingsTarget.amount) || 0;
+  const total = getCombinedSavings();
+  const remaining = Math.max(0, target - total);
+  const percentage = target > 0 ? Math.min(100, (total / target) * 100) : 0;
+
+  setText("targetPercentage", `${percentage.toFixed(1)}%`);
+  setText("remainingTarget", money(remaining));
+  setText("targetAmountLabel", money(target));
+
+  const progress = getElement("targetProgressFill");
+
+  if (progress) {
+    progress.style.width = `${percentage}%`;
+  }
+
+  const status = getElement("targetStatus");
+
+  if (status) {
+    status.textContent = target === 0
+      ? "Set your savings target"
+      : percentage >= 100
+        ? "Target achieved!"
+        : `${money(remaining)} remaining to reach your goal`;
+  }
+
+  updateChart("targetChart", {
+    type: "doughnut",
+    data: {
+      labels: ["Saved", "Remaining"],
+      datasets: [{
+        data: [total, remaining],
+        backgroundColor: ["#28d7c5", "#27334a"],
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: doughnutOptions()
+  });
+}
+
+/* =========================================================
+   DENOMINATION SUMMARY
+========================================================= */
 
 function renderDenominationSummary() {
-    const container = document.getElementById("denominationSummary");
+  const container = getElement("denominationSummary");
+  if (!container) return;
 
-    container.innerHTML = DENOMS.map(d => {
-        const group = notes.filter(
-            note => Number(note.denomination) === d.value
-        );
+  container.innerHTML = DENOMS.map(item => {
+    const matching = notes.filter(note =>
+      Number(note.denomination) === item.value
+    );
 
-        const amount = group.length * d.value;
+    const count = matching.length;
+    const amount = count * item.value;
 
-        return `
-            <article class="denom-card" style="--tone:${d.color}">
-                <div class="denom-card-head">₹${d.value}</div>
-
-                <div class="denom-card-body">
-                    <span>${group.length} Notes</span>
-                    <strong>${money(amount)}</strong>
-                </div>
-            </article>
-        `;
-    }).join("");
+    return `
+      <div class="denomination-card" style="--denom-color:${item.color}">
+        <div class="denomination-card-top">
+          <span class="denomination-value">${item.label}</span>
+          <span class="denomination-count">${count} notes</span>
+        </div>
+        <div class="denomination-card-amount">${money(amount)}</div>
+        <div class="denomination-card-footer">
+          <span>Collected</span>
+          <span>${count} × ${item.value}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
-
-// 15. RECENTLY ADDED NOTES
+/* =========================================================
+   RECENT NOTES
+========================================================= */
 
 function renderRecentNotes() {
-    const container = document.getElementById("recentRows");
+  const tbody = getElement("recentRows");
+  if (!tbody) return;
 
-    const recent = [...notes]
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 6);
+  const recent = [...notes]
+    .sort((a, b) =>
+      new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
+    )
+    .slice(0, 8);
 
-    if (recent.length === 0) {
-        container.innerHTML = `
-            <tr>
-                <td colspan="5" class="empty-state">
-                    No notes added yet.
-                </td>
-            </tr>
-        `;
-        return;
-    }
+  if (!recent.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="empty-state">No currency notes added yet.</td>
+      </tr>
+    `;
+    return;
+  }
 
-    container.innerHTML = recent.map(note => {
-        const denomination = getDenomination(note.denomination);
-        const color = denomination ? denomination.color : "#8993a3";
-
-        return `
-            <tr>
-                <td>
-                    <span
-                        class="denom-pill"
-                        style="--tone:${color}">
-                        ₹${note.denomination}
-                    </span>
-                </td>
-
-                <td>${escapeHTML(note.prefix)}</td>
-
-                <td>${escapeHTML(note.alphabet)}</td>
-
-                <td>
-                    <strong>${escapeHTML(note.serial)}</strong>
-                </td>
-
-                <td>${formatDate(note.date)}</td>
-            </tr>
-        `;
-    }).join("");
+  tbody.innerHTML = recent.map(note => `
+    <tr>
+      <td>
+        <span class="table-denomination">
+          ${money(getNoteAmount(note))}
+        </span>
+      </td>
+      <td>${escapeHTML(note.prefix)} ${escapeHTML(note.alphabet)} ${escapeHTML(note.serial)}</td>
+      <td>${formatDate(note.date)}</td>
+      <td>${money(getNoteAmount(note))}</td>
+    </tr>
+  `).join("");
 }
 
+/* =========================================================
+   ACCOUNT PAGE
+========================================================= */
 
-// 16. CHARTS
+function renderAccount() {
+  const bank = getBankBalance();
+  const deposits = getTransactionAmount("deposit") +
+    getTransactionAmount("transfer_in");
+
+  const withdrawals = getTransactionAmount("withdrawal");
+
+  setText("accountPageBalance", money(bank));
+  setText("totalDeposits", money(deposits));
+  setText("totalWithdrawals", money(withdrawals));
+  setText("availableCash", money(getCashBalance()));
+  setText("transferBankBalance", money(bank));
+
+  renderAccountHistory();
+}
+
+function renderAccountHistory() {
+  const tbody = getElement("accountRows");
+  if (!tbody) return;
+
+  const history = [...accountTransactions]
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (!history.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="empty-state">No account transactions yet.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  const labels = {
+    deposit: "Deposit",
+    withdrawal: "Withdrawal",
+    transfer_in: "Cash Transfer In",
+    transfer_out: "Cash Transfer Out"
+  };
+
+  tbody.innerHTML = history.map(item => {
+    const isPositive = ["deposit", "transfer_in"].includes(item.type);
+
+    return `
+      <tr>
+        <td>${formatDate(item.date)}</td>
+        <td>${escapeHTML(item.description || labels[item.type] || item.type)}</td>
+        <td>${escapeHTML(labels[item.type] || item.type)}</td>
+        <td class="${isPositive ? "positive-amount" : "negative-amount"}">
+          ${isPositive ? "+" : "−"}${money(item.amount)}
+        </td>
+        <td>
+          <button
+            type="button"
+            class="delete-button"
+            data-delete-transaction="${escapeHTML(item.id)}"
+            aria-label="Delete transaction"
+          >Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  tbody.querySelectorAll("[data-delete-transaction]").forEach(button => {
+    button.addEventListener("click", () => {
+      deleteAccountTransaction(button.dataset.deleteTransaction);
+    });
+  });
+}
+
+function deleteAccountTransaction(id) {
+  const item = accountTransactions.find(entry => entry.id === id);
+  if (!item) return;
+
+  if (item.type === "transfer_in" || item.type === "transfer_out") {
+    const transferId = id.replace(/-(in|out)$/, "");
+
+    const related = accountTransactions.filter(entry =>
+      entry.id === `${transferId}-in` ||
+      entry.id === `${transferId}-out`
+    );
+
+    if (related.length === 2) {
+      accountTransactions = accountTransactions.filter(entry =>
+        !related.includes(entry)
+      );
+    } else {
+      accountTransactions = accountTransactions.filter(entry => entry.id !== id);
+    }
+  } else {
+    accountTransactions = accountTransactions.filter(entry => entry.id !== id);
+  }
+
+  saveData();
+  renderAll();
+}
+
+/* =========================================================
+   CHARTS
+========================================================= */
+
+function doughnutOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: "72%",
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: {
+          color: "#aab8d0",
+          padding: 18,
+          usePointStyle: true
+        }
+      }
+    }
+  };
+}
+
+function lineOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: "index" },
+    plugins: {
+      legend: {
+        labels: { color: "#aab8d0", usePointStyle: true }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: "#8998b2" },
+        grid: { color: "rgba(255,255,255,0.04)" }
+      },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: "#8998b2",
+          callback: value => `₹${Number(value).toLocaleString("en-IN")}`
+        },
+        grid: { color: "rgba(255,255,255,0.06)" }
+      }
+    }
+  };
+}
+
+function updateChart(id, config) {
+  const canvas = getElement(id);
+  if (!canvas || typeof Chart === "undefined") return;
+
+  if (charts[id]) {
+    charts[id].destroy();
+  }
+
+  charts[id] = new Chart(canvas, config);
+}
 
 function renderCharts() {
-    if (typeof Chart === "undefined") {
-        console.error("Chart.js is not loaded.");
-        return;
-    }
-
-    renderPieChart();
-    renderDailyChart();
-    renderDailyTotalChart();
+  renderDenominationChart();
+  renderDailyChart();
+  renderAccountChart();
+  renderCashAccountChart();
 }
 
+function renderDenominationChart() {
+  const counts = DENOMS.map(item =>
+    notes.filter(note => Number(note.denomination) === item.value).length
+  );
 
-// 17. PIE CHART
+  updateChart("denominationChart", {
+    type: "doughnut",
+    data: {
+      labels: DENOMS.map(item => item.label),
+      datasets: [{
+        data: counts,
+        backgroundColor: DENOMS.map(item => item.color),
+        borderWidth: 0,
+        hoverOffset: 10
+      }]
+    },
+    options: doughnutOptions()
+  });
 
-function renderPieChart() {
-    const canvas = document.getElementById("denominationChart");
+  const legend = getElement("pieLegend");
 
-    if (!canvas) return;
-
-    const totals = DENOMS.map(d =>
-        notes
-            .filter(note => Number(note.denomination) === d.value)
-            .reduce((sum, note) => sum + Number(note.denomination), 0)
-    );
-
-    if (pieChart) {
-        pieChart.destroy();
-    }
-
-    pieChart = new Chart(canvas, {
-        type: "doughnut",
-
-        data: {
-            labels: DENOMS.map(d => `₹${d.value}`),
-
-            datasets: [{
-                data: totals,
-                backgroundColor: DENOMS.map(d => d.color),
-                borderColor: "#ffffff",
-                borderWidth: 4,
-                hoverOffset: 8
-            }]
-        },
-
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: "68%",
-
-            plugins: {
-                legend: {
-                    display: false
-                },
-
-                tooltip: {
-                    callbacks: {
-                        label: context =>
-                            `${context.label}: ${money(context.raw)}`
-                    }
-                }
-            }
-        }
-    });
-
-    const legend = document.getElementById("pieLegend");
-
-    if (legend) {
-        legend.innerHTML = DENOMS.map((d, index) => `
-            <span class="legend-item">
-                <i
-                    class="legend-dot"
-                    style="background:${d.color}">
-                </i>
-                ₹${d.value}: ${money(totals[index])}
-            </span>
-        `).join("");
-    }
+  if (legend) {
+    legend.innerHTML = DENOMS.map((item, index) => `
+      <div class="legend-item">
+        <span class="legend-dot" style="background:${item.color}"></span>
+        <span>${item.label}</span>
+        <strong>${counts[index]}</strong>
+      </div>
+    `).join("");
+  }
 }
 
+function getRecentDates() {
+  const dates = new Set([
+    ...notes.map(note => note.date),
+    ...accountTransactions.map(item => item.date)
+  ]);
 
-// 18. DAILY SAVINGS BY DENOMINATION
+  return [...dates].filter(Boolean).sort().slice(-14);
+}
 
 function renderDailyChart() {
-    const canvas = document.getElementById("dailyChart");
+  const dates = getRecentDates();
 
-    if (!canvas) return;
+  const datasets = DENOMS.map(item => ({
+    label: item.label,
+    data: dates.map(date =>
+      notes
+        .filter(note =>
+          note.date === date &&
+          Number(note.denomination) === item.value
+        )
+        .reduce((sum, note) => sum + getNoteAmount(note), 0)
+    ),
+    borderColor: item.color,
+    backgroundColor: item.color,
+    tension: 0.35,
+    fill: false
+  }));
 
-    const allDates = [...new Set(
-        notes.map(note => note.date)
-    )].sort();
-
-    const labels = allDates.length ? allDates : [todayISO()];
-
-    if (dailyChart) {
-        dailyChart.destroy();
-    }
-
-    const datasets = DENOMS.map(d => ({
-        label: `₹${d.value}`,
-
-        data: labels.map(date =>
-            notes
-                .filter(note =>
-                    note.date === date &&
-                    Number(note.denomination) === d.value
-                )
-                .reduce(
-                    (sum, note) => sum + Number(note.denomination),
-                    0
-                )
-        ),
-
-        borderColor: d.color,
-        backgroundColor: d.color,
-        borderWidth: 2.5,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        tension: 0.35,
-        fill: false
-    }));
-
-    dailyChart = new Chart(canvas, {
-        type: "line",
-
-        data: {
-            labels: labels.map(formatShortDate),
-            datasets
-        },
-
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-
-            interaction: {
-                mode: "index",
-                intersect: false
-            },
-
-            plugins: {
-                legend: {
-                    position: "bottom",
-
-                    labels: {
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        padding: 14,
-                        font: {
-                            size: 10
-                        }
-                    }
-                },
-
-                tooltip: {
-                    callbacks: {
-                        label: context =>
-                            `${context.dataset.label}: ${money(context.raw)}`
-                    }
-                }
-            },
-
-            scales: {
-                y: {
-                    beginAtZero: true,
-
-                    ticks: {
-                        callback: value => money(value)
-                    },
-
-                    grid: {
-                        color: "rgba(30, 45, 70, 0.07)"
-                    }
-                },
-
-                x: {
-                    grid: {
-                        display: false
-                    },
-
-                    ticks: {
-                        maxTicksLimit: 7
-                    }
-                }
-            }
-        }
-    });
+  updateChart("dailyChart", {
+    type: "line",
+    data: {
+      labels: dates.map(date => formatDate(date)),
+      datasets
+    },
+    options: lineOptions()
+  });
 }
 
+function calculateDailyBalances() {
+  const dates = getRecentDates();
 
-// 19. DAILY SAVINGS TOTAL
+  let cash = 0;
+  let bank = 0;
 
-function renderDailyTotalChart() {
-    const canvas = document.getElementById("dailyTotalChart");
+  return dates.map(date => {
+    notes
+      .filter(note => note.date === date)
+      .forEach(note => cash += getNoteAmount(note));
 
-    if (!canvas) return;
+    accountTransactions
+      .filter(item => item.date === date)
+      .forEach(item => {
+        const amount = Number(item.amount) || 0;
 
-    const allDates = [...new Set(
-        notes.map(note => note.date)
-    )].sort();
+        if (item.type === "deposit") bank += amount;
+        if (item.type === "withdrawal") bank -= amount;
+        if (item.type === "transfer_in") bank += amount;
+        if (item.type === "transfer_out") cash -= amount;
+      });
 
-    const labels = allDates.length ? allDates : [todayISO()];
-
-    const totals = labels.map(date =>
-        notes
-            .filter(note => note.date === date)
-            .reduce(
-                (sum, note) => sum + Number(note.denomination),
-                0
-            )
-    );
-
-    if (dailyTotalChart) {
-        dailyTotalChart.destroy();
-    }
-
-    const ctx = canvas.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-
-    gradient.addColorStop(0, "rgba(83, 109, 254, 0.24)");
-    gradient.addColorStop(1, "rgba(83, 109, 254, 0.015)");
-
-    dailyTotalChart = new Chart(canvas, {
-        type: "line",
-
-        data: {
-            labels: labels.map(formatShortDate),
-
-            datasets: [{
-                label: "Total Daily Savings",
-                data: totals,
-
-                borderColor: "#536DFE",
-                backgroundColor: gradient,
-                borderWidth: 3,
-
-                pointRadius: 4,
-                pointHoverRadius: 7,
-                pointBackgroundColor: "#536DFE",
-                pointBorderColor: "#ffffff",
-                pointBorderWidth: 2,
-
-                tension: 0.35,
-                fill: true
-            }]
-        },
-
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-
-            interaction: {
-                mode: "index",
-                intersect: false
-            },
-
-            plugins: {
-                legend: {
-                    display: true,
-                    position: "bottom",
-
-                    labels: {
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        padding: 14,
-                        font: {
-                            size: 10
-                        }
-                    }
-                },
-
-                tooltip: {
-                    callbacks: {
-                        label: context =>
-                            `Total saved: ${money(context.raw)}`
-                    }
-                }
-            },
-
-            scales: {
-                y: {
-                    beginAtZero: true,
-
-                    ticks: {
-                        callback: value => money(value)
-                    },
-
-                    grid: {
-                        color: "rgba(30, 45, 70, 0.07)"
-                    }
-                },
-
-                x: {
-                    grid: {
-                        display: false
-                    },
-
-                    ticks: {
-                        maxTicksLimit: 7
-                    }
-                }
-            }
-        }
-    });
+    return {
+      date,
+      cash,
+      bank: Math.max(0, bank)
+    };
+  });
 }
 
+function renderAccountChart() {
+  const balances = calculateDailyBalances();
 
-// 20. SERIES PAGE
+  updateChart("accountChart", {
+    type: "line",
+    data: {
+      labels: balances.map(item => formatDate(item.date)),
+      datasets: [{
+        label: "Bank Balance",
+        data: balances.map(item => item.bank),
+        borderColor: "#a879ff",
+        backgroundColor: "rgba(168,121,255,0.12)",
+        fill: true,
+        tension: 0.35
+      }]
+    },
+    options: lineOptions()
+  });
+}
+
+function renderCashAccountChart() {
+  const balances = calculateDailyBalances();
+
+  updateChart("cashAccountChart", {
+    type: "line",
+    data: {
+      labels: balances.map(item => formatDate(item.date)),
+      datasets: [
+        {
+          label: "Available Cash",
+          data: balances.map(item => item.cash),
+          borderColor: "#28d7c5",
+          backgroundColor: "rgba(40,215,197,0.10)",
+          fill: true,
+          tension: 0.35
+        },
+        {
+          label: "Bank Balance",
+          data: balances.map(item => item.bank),
+          borderColor: "#a879ff",
+          backgroundColor: "rgba(168,121,255,0.08)",
+          fill: true,
+          tension: 0.35
+        }
+      ]
+    },
+    options: lineOptions()
+  });
+}
+
+/* =========================================================
+   SERIES REGISTER
+========================================================= */
+
+function setupSeriesControls() {
+  const search = getElement("seriesSearch");
+
+  search?.addEventListener("input", renderSeries);
+
+  document.querySelectorAll("[data-filter], [data-sort]").forEach(control => {
+    control.addEventListener("change", renderSeries);
+  });
+}
+
+function getFilteredNotes() {
+  let result = [...notes];
+
+  const search = getElement("seriesSearch")?.value
+    .trim()
+    .toLowerCase() || "";
+
+  if (search) {
+    result = result.filter(note => {
+      const fullText = [
+        note.prefix,
+        note.alphabet,
+        note.serial,
+        note.denomination,
+        note.date
+      ].join(" ").toLowerCase();
+
+      return fullText.includes(search);
+    });
+  }
+
+  const filter = getElement("filterOptions")?.value || "all";
+
+  if (filter !== "all") {
+    if (filter === "duplicates") {
+      const counts = {};
+
+      notes.forEach(note => {
+        const key = `${note.prefix}-${note.alphabet}-${note.serial}`;
+        counts[key] = (counts[key] || 0) + 1;
+      });
+
+      result = result.filter(note =>
+        counts[`${note.prefix}-${note.alphabet}-${note.serial}`] > 1
+      );
+    } else {
+      result = result.filter(note =>
+        String(note.denomination) === filter
+      );
+    }
+  }
+
+  const sort = getElement("seriesSort")?.value ||
+    document.querySelector("[data-sort]")?.value ||
+    "newest";
+
+  result.sort((a, b) => {
+    if (sort === "oldest") return new Date(a.date) - new Date(b.date);
+    if (sort === "amount-high") return getNoteAmount(b) - getNoteAmount(a);
+    if (sort === "amount-low") return getNoteAmount(a) - getNoteAmount(b);
+    if (sort === "serial") return String(a.serial).localeCompare(String(b.serial));
+    return new Date(b.date) - new Date(a.date);
+  });
+
+  return result;
+}
+
+function getConsecutiveGroups(list) {
+  const sorted = [...list].sort((a, b) => {
+    const first = `${a.prefix}-${a.alphabet}`;
+    const second = `${b.prefix}-${b.alphabet}`;
+
+    return first.localeCompare(second) ||
+      Number(a.serial) - Number(b.serial);
+  });
+
+  const groups = [];
+  let current = [];
+
+  sorted.forEach(note => {
+    const previous = current[current.length - 1];
+
+    const sameSeries = previous &&
+      previous.prefix === note.prefix &&
+      previous.alphabet === note.alphabet;
+
+    const consecutive = sameSeries &&
+      Number(note.serial) === Number(previous.serial) + 1;
+
+    if (!current.length || consecutive) {
+      current.push(note);
+    } else {
+      if (current.length > 1) groups.push(current);
+      current = [note];
+    }
+  });
+
+  if (current.length > 1) groups.push(current);
+
+  return groups;
+}
 
 function renderSeries() {
-    const search = document.getElementById("seriesSearch")
-        .value.trim().toLowerCase();
+  const tbody = getElement("seriesRows");
+  if (!tbody) return;
 
-    let filtered = notes.filter(note =>
-        selectedFilter === "all" ||
-        Number(note.denomination) === Number(selectedFilter)
-    );
+  const filtered = getFilteredNotes();
+  const groups = getConsecutiveGroups(filtered);
 
-    let rows = filtered.filter(note => {
-        const searchText = [
-            note.prefix,
-            note.alphabet,
-            note.serial,
-            getFullSeries(note),
-            note.denomination
-        ].join(" ").toLowerCase();
+  const duplicateKeys = new Set();
+  const seen = new Set();
 
-        return searchText.includes(search);
+  notes.forEach(note => {
+    const key = `${note.prefix}-${note.alphabet}-${note.serial}`;
+
+    if (seen.has(key)) duplicateKeys.add(key);
+    seen.add(key);
+  });
+
+  setText("seriesCount", notes.length);
+  setText("prefixCount", new Set(notes.map(note => note.prefix)).size);
+  setText("groupCount", groups.length);
+  setText("resultCount", filtered.length);
+  setText("duplicateCount", duplicateKeys.size);
+
+  setText("seriesTitle", "Currency Series Register");
+  setText("seriesSubtitle", `${filtered.length} matching currency notes`);
+
+  const total = filtered.reduce((sum, note) =>
+    sum + getNoteAmount(note), 0
+  );
+
+  setText("seriesSummary", `Filtered collection value: ${money(total)}`);
+
+  if (!filtered.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-state">No matching currency notes found.</td>
+      </tr>
+    `;
+  } else {
+    tbody.innerHTML = filtered.map((note, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHTML(note.prefix)}</td>
+        <td>${escapeHTML(note.alphabet)}</td>
+        <td>${escapeHTML(note.serial)}</td>
+        <td>
+          <strong>${escapeHTML(note.prefix)}-${escapeHTML(note.alphabet)}-${escapeHTML(note.serial)}</strong>
+        </td>
+        <td>${formatDate(note.date)}</td>
+        <td>
+          <button
+            type="button"
+            class="delete-button"
+            data-delete-note="${escapeHTML(note.id)}"
+          >Delete</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  tbody.querySelectorAll("[data-delete-note]").forEach(button => {
+    button.addEventListener("click", () => {
+      deleteNote(button.dataset.deleteNote);
     });
+  });
 
-    rows.sort((a, b) => {
-        const denominationSort =
-            Number(a.denomination) - Number(b.denomination);
-
-        if (denominationSort !== 0) {
-            return denominationSort;
-        }
-
-        const prefixSort = a.prefix.localeCompare(
-            b.prefix,
-            undefined,
-            { numeric: true }
-        );
-
-        if (prefixSort !== 0) {
-            return prefixSort;
-        }
-
-        const alphabetSort = a.alphabet.localeCompare(b.alphabet);
-
-        if (alphabetSort !== 0) {
-            return alphabetSort;
-        }
-
-        const serialSort = a.serial.localeCompare(
-            b.serial,
-            undefined,
-            { numeric: true }
-        );
-
-        return sortOrder === "asc" ? serialSort : -serialSort;
-    });
-
-    const title = selectedFilter === "all"
-        ? "All Series"
-        : `₹${selectedFilter} Series`;
-
-    document.getElementById("seriesTitle").textContent = title;
-
-    document.getElementById("seriesSubtitle").textContent =
-        `${rows.length} saved notes · ${
-            sortOrder === "asc" ? "Ascending" : "Descending"
-        } serial order`;
-
-    const container = document.getElementById("seriesRows");
-
-    if (rows.length === 0) {
-        container.innerHTML = `
-            <tr>
-                <td colspan="8" class="empty-state">
-                    No matching serial numbers found.
-                </td>
-            </tr>
-        `;
-    } else {
-        container.innerHTML = rows.map((note, index) => {
-            const denomination = getDenomination(note.denomination);
-            const color = denomination ? denomination.color : "#8993a3";
-
-            return `
-                <tr>
-                    <td>${index + 1}</td>
-
-                    <td>
-                        <span
-                            class="denom-pill"
-                            style="--tone:${color}">
-                            ₹${note.denomination}
-                        </span>
-                    </td>
-
-                    <td>${escapeHTML(note.prefix)}</td>
-
-                    <td>${escapeHTML(note.alphabet)}</td>
-
-                    <td>${escapeHTML(note.serial)}</td>
-
-                    <td class="full-series">
-                        ${escapeHTML(getFullSeries(note))}
-                    </td>
-
-                    <td>${formatDate(note.date)}</td>
-
-                    <td>
-                        <button
-                            class="delete-button"
-                            data-delete="${escapeHTML(note.id)}"
-                            title="Delete note">
-                            ×
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join("");
-    }
-
-    container.querySelectorAll("[data-delete]").forEach(button => {
-        button.addEventListener("click", function () {
-            deleteNote(this.dataset.delete);
-        });
-    });
-
-    document.getElementById("seriesCount").textContent = notes.length;
-
-    document.getElementById("prefixCount").textContent =
-        new Set(
-            notes.map(note =>
-                `${note.denomination}-${note.prefix}-${note.alphabet}`
-            )
-        ).size;
-
-    document.getElementById("groupCount").textContent =
-        countConsecutiveGroups(notes);
-
-    document.getElementById("resultCount").textContent = rows.length;
-
-    document.getElementById("insightNotes").textContent = notes.length;
-
-    document.getElementById("insightDenoms").textContent =
-        new Set(notes.map(note => note.denomination)).size;
-
-    const counts = new Map();
-
-    notes.forEach(note => {
-        const key = `${note.denomination}-${getFullSeries(note)}`;
-
-        counts.set(key, (counts.get(key) || 0) + 1);
-    });
-
-    const duplicates = [...counts.values()]
-        .filter(count => count > 1)
-        .reduce((sum, count) => sum + count - 1, 0);
-
-    document.getElementById("duplicateCount").textContent = duplicates;
-
-    renderSeriesSummary();
+  renderSeriesInsights(filtered, groups, duplicateKeys.size);
 }
 
+function renderSeriesInsights(filtered, groups, duplicateCount) {
+  const insightNotes = getElement("insightNotes");
+  const insightDenoms = getElement("insightDenoms");
 
-// 21. CONSECUTIVE SERIES DETECTION
+  if (insightNotes) {
+    insightNotes.textContent = `${filtered.length} notes • ${money(
+      filtered.reduce((sum, note) => sum + getNoteAmount(note), 0)
+    )}`;
+  }
 
-function countConsecutiveGroups(list) {
-    const groups = new Map();
-
-    list.forEach(note => {
-        const key =
-            `${note.denomination}-${note.prefix}-${note.alphabet}`;
-
-        if (!groups.has(key)) {
-            groups.set(key, []);
-        }
-
-        groups.get(key).push(Number(note.serial));
-    });
-
-    let total = 0;
-
-    groups.forEach(numbers => {
-        const unique = [...new Set(numbers)]
-            .sort((a, b) => a - b);
-
-        let run = 1;
-
-        for (let i = 1; i < unique.length; i++) {
-            if (unique[i] === unique[i - 1] + 1) {
-                run++;
-            } else {
-                if (run > 1) total++;
-                run = 1;
-            }
-        }
-
-        if (run > 1) total++;
-    });
-
-    return total;
-}
-
-
-// 22. SERIES SUMMARY
-
-function renderSeriesSummary() {
-    const container = document.getElementById("seriesSummary");
-
-    container.innerHTML = DENOMS.map(d => {
-        const count = notes.filter(
-            note => Number(note.denomination) === d.value
+  if (insightDenoms) {
+    insightDenoms.textContent = DENOMS
+      .map(item => {
+        const count = filtered.filter(note =>
+          Number(note.denomination) === item.value
         ).length;
 
-        return `
-            <div class="summary-row">
-                <span class="summary-left">
-                    <i
-                        class="filter-dot"
-                        style="--tone:${d.color}">
-                    </i>
-                    ₹${d.value}
-                </span>
+        return `${item.label}: ${count}`;
+      })
+      .join("  |  ");
+  }
 
-                <strong>${count} Notes</strong>
-            </div>
-        `;
-    }).join("");
+  const summary = getElement("seriesSummary");
+
+  if (summary) {
+    summary.textContent =
+      `${groups.length} consecutive groups found • ${duplicateCount} duplicate serial entries`;
+  }
 }
 
-
-// 23. DELETE NOTE
+/* =========================================================
+   DELETE NOTE
+========================================================= */
 
 function deleteNote(id) {
-    const confirmed = confirm(
-        "Are you sure you want to delete this currency note?"
-    );
+  const note = notes.find(item => item.id === id);
+  if (!note) return;
 
-    if (!confirmed) return;
+  const confirmed = confirm(
+    `Delete the ${money(getNoteAmount(note))} note with serial ${note.prefix}-${note.alphabet}-${note.serial}?`
+  );
 
-    notes = notes.filter(note => String(note.id) !== String(id));
+  if (!confirmed) return;
 
-    saveNotes();
-    renderAll();
+  notes = notes.filter(item => item.id !== id);
+
+  saveData();
+  renderAll();
 }
 
+/* =========================================================
+   STARTUP CHECK
+========================================================= */
 
-// 24. START WEBSITE
-
-init();
+console.log("CurrencyVault initialized successfully.");
+console.log(`Loaded ${notes.length} currency notes.`);
